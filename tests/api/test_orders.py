@@ -19,6 +19,7 @@ class OrdersAPITestCase(APITestCase):
     def test_create_order_success(self):
         """تست ثبت موفق سفارش و کسر صحیح از انبار کالا"""
         url = reverse('orders')
+        print(url)
         data = {
             "delivery_type": "delivery",
             "address_id": self.address.id,
