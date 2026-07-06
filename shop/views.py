@@ -1,9 +1,10 @@
-from django.db.models import Q
 from django.db import transaction
+from django.db.models import Q, F 
 from django.core.cache import cache
 from rest_framework.views import APIView
 from rest_framework import status, viewsets
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 
 from .models import AppUser, Store, Category, Product, Address, Recipient, Order, OrderItem
@@ -170,11 +171,10 @@ class OrderView(APIView):
             return Response({"detail": "لیست اقلام ارسالی خالی است."}, status=status.HTTP_400_BAD_REQUEST)
             
         try:
-            # ۱. انجام محاسبات مالی و اعتبارسنجی موجودی در تراکنش
+            # ۱. انجام محاسبات مالی و اعتبارسنجی اولیه موجودی
             with transaction.atomic():
                 totals = calculate_checkout_totals(items_data, delivery_type)
                 
-                # بررسی صحت آدرس
                 address = None
                 if delivery_type == 'delivery':
                     if not address_id:
@@ -184,7 +184,7 @@ class OrderView(APIView):
                     except Address.DoesNotExist:
                         return Response({"detail": "آدرس مورد نظر یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
                 
-                # ۲. ایجاد رکورد سفارش
+                # ۲. ایجاد اولیه رکورد سفارش
                 order = Order.objects.create(
                     user=request.user,
                     delivery_type=delivery_type,
@@ -197,12 +197,27 @@ class OrderView(APIView):
                     total=totals['total']
                 )
                 
-                # ۳. ذخیره اقلام سفارش و کسر از موجودی انبار
+                # ۳. ذخیره اقلام و کسر ایمن موجودی به صورت کاملاً همزمان و اتمیک
                 for validated_item in totals['validated_items']:
                     product = validated_item['product']
                     count = validated_item['count']
                     
-                    # ذخیره در جدول اقلام فاکتور
+                    # اجرای کوئری اتمیک در سطح دیتابیس با شرط بزرگتر یا مساوی بودن موجودی از تعداد درخواستی
+                    updated_rows = Product.objects.filter(
+                        id=product.id,
+                        stock__gte=count,
+                        is_available=True
+                    ).update(stock=F('stock') - count)
+                    
+                    # اگر ردیفی تغییر نکرد، یعنی موجودی در همان لحظه توسط تراکنش دیگری تمام شده است
+                    if updated_rows == 0:
+                        raise ValidationError({
+                            "detail": f"متاسفانه در همین لحظه موجودی محصول '{product.title}' به اتمام رسید یا کافی نیست.",
+                            "error_code": "OUT_OF_STOCK",
+                            "product_id": product.id
+                        })
+                    
+                    # ذخیره در فاکتور
                     OrderItem.objects.create(
                         order=order,
                         product=product,
@@ -211,16 +226,15 @@ class OrderView(APIView):
                         price_at_purchase=validated_item['price_at_purchase']
                     )
                     
-                    # کسر موجودی انبار
-                    product.stock -= count
-                    product.save()
-                    
             return Response({
                 "order_id": order.id,
                 "status": order.status,
                 "detail": "سفارش شما با موفقیت ثبت شد."
             }, status=status.HTTP_201_CREATED)
             
+        except ValidationError as e:
+            # عبور دادن خطاهای اعتبارسنجی ساختار یافته برای نمایش در فرانت‌اند
+            raise e
         except Exception as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 

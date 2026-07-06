@@ -80,3 +80,48 @@ class OrdersAPITestCase(APITestCase):
         self.assertEqual(res_pickup.status_code, status.HTTP_201_CREATED)
         order_pickup = Order.objects.get(id=res_pickup.data['order_id'])
         self.assertEqual(order_pickup.courier_status, 'not_applicable')
+
+    @patch('shop.views.calculate_checkout_totals')
+    def test_create_order_concurrency_stock_depletion(self, mock_calculate):
+        """
+        تست جلوگیری از خرید همزمان (Race Condition):
+        موجودی کالا ۵ عدد است. کاربر سفارش ۳ عدد را آغاز می‌کند.
+        با شبیه‌سازی و پچ کردن محاسبات مالی، از فیلتر اولیه عبور کرده
+        اما زمان ویرایش اتمیک دیتابیس به دلیل تغییر ناگهانی موجودی با خطا مواجه می‌شود.
+        """
+        # تنظیم خروجی ساختگی برای شبیه‌سازی تأیید اولیه سبد خرید
+        mock_calculate.return_value = {
+            'items_price': 150000,
+            'discount': 0,
+            'delivery_price': 30000,
+            'total': 180000,
+            'validated_items': [{
+                'product': self.product,
+                'count': 3,
+                'price_at_purchase': self.product.discounted_price
+            }]
+        }
+
+        # شبیه‌سازی خرید کاربر دیگر و کاهش ناگهانی موجودی به ۱ عدد در دیتابیس
+        self.product.stock = 1
+        self.product.save()
+
+        url = reverse('orders')
+        data = {
+            "delivery_type": "delivery",
+            "address_id": self.address.id,
+            "items": [{"product_id": self.product.id, "count": 3}]
+        }
+        
+        response = self.client.post(url, data, format='json')
+
+        
+        # بررسی لغو ثبت سفارش (Rollback کامل دیتابیس)
+        self.assertEqual(Order.objects.count(), 0)
+        self.assertEqual(OrderItem.objects.count(), 0)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['error_code'], 'OUT_OF_STOCK')
+        
+        # تبدیل مقدار رشته‌ای ErrorDetail به int جهت مقایسه عددی صحیح
+        self.assertEqual(int(response.data['product_id']), self.product.id)
