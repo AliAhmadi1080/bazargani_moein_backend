@@ -1,7 +1,14 @@
+# shop/services.py
+
 from rest_framework.exceptions import ValidationError
 from .models import Product, Store
 
 def calculate_checkout_totals(items_data, delivery_type):
+    # ۱. بررسی باز بودن فروشگاه در بالاترین لایه برای جلوگیری از کوئری‌های اضافه
+    store = Store.objects.first()
+    if store and not store.is_open:
+        raise ValidationError("فروشگاه در حال حاضر بسته است و امکان ثبت سفارش وجود ندارد.")
+
     items_price = 0
     discount = 0
     validated_items = []
@@ -18,9 +25,7 @@ def calculate_checkout_totals(items_data, delivery_type):
         if product.stock < count:
             raise ValidationError(f"موجودی محصول '{product.title}' کافی نیست. موجودی فعلی: {product.stock}")
             
-        # محاسبه قیمت کل بدون تخفیف
         raw_price = product.price * count
-        # محاسبه قیمت با اعمال تخفیف
         discounted_price = product.discounted_price * count
         
         items_price += raw_price
@@ -32,14 +37,12 @@ def calculate_checkout_totals(items_data, delivery_type):
             'price_at_purchase': product.discounted_price
         })
         
-    store = Store.objects.first()
     delivery_price = 0
     if delivery_type == 'delivery' and store:
         delivery_price = store.base_delivery_fee
         
     total = items_price - discount + delivery_price
     
-    # بررسی حداقل مبلغ سفارش
     if store and (items_price - discount) < store.min_order_amount:
          raise ValidationError(f"حداقل مبلغ سفارش برای ارسال {store.min_order_amount} تومان است.")
 

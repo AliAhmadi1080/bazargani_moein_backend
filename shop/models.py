@@ -87,14 +87,12 @@ class Order(models.Model):
         ('canceled', 'لغو شده'),
     )
 
-    # 2. وضعیت فیزیکی پیک (فقط برای سفارشات delivery)
     COURIER_STATUS_CHOICES = (
         ('not_applicable', 'بدون پیک (تحویل حضوری)'),
         ('pending', 'در جستجوی پیک'),
         ('moving_to_store', 'پیک در مسیر فروشگاه'),
         ('at_store', 'پیک در فروشگاه (در حال دریافت)'),
         ('moving_to_customer', 'پیک در مسیر مقصد'),
-        # تحویل داده شد از اینجا حذف می‌شود، چون وقتی پیک کالا را داد، وضعیت کلان سفارش completed می‌شود.
     )
     
     user = models.ForeignKey(AppUser, on_delete=models.CASCADE, related_name='orders')
@@ -105,19 +103,28 @@ class Order(models.Model):
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='waiting')
         
+    # اصلاح مقدار پیش‌فرض از 'not_assigned' به 'pending'
     courier_status = models.CharField(
         max_length=30, 
         choices=COURIER_STATUS_CHOICES, 
-        default='not_assigned'
+        default='pending'
     )
 
-    # مبالغ نهایی ثبت‌شده در زمان خرید
     items_price = models.DecimalField(max_digits=12, decimal_places=0)
     discount = models.DecimalField(max_digits=12, decimal_places=0)
     delivery_price = models.DecimalField(max_digits=12, decimal_places=0)
     total = models.DecimalField(max_digits=12, decimal_places=0)
     
     created_at = models.DateTimeField(auto_now_add=True)
+
+    # تعیین خودکار وضعیت اولیه پیک بر اساس نوع ارسال هنگام ایجاد رکورد جدید
+    def save(self, *args, **kwargs):
+        if not self.pk:  # فقط در زمان اولین ذخیره‌سازی (ایجاد)
+            if self.delivery_type == 'pickup':
+                self.courier_status = 'not_applicable'
+            else:
+                self.courier_status = 'pending'
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"سفارش شماره {self.id} - کاربر {self.user.id}"

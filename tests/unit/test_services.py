@@ -44,3 +44,27 @@ class ServicesUnitTestCase(TestCase):
         items = [{"product_id": self.product1.id, "count": 1}]
         with self.assertRaises(ValidationError):
             calculate_checkout_totals(items, "delivery")
+
+    # افزودن این متدها به کلاس ServicesUnitTestCase در shop/test_services.py
+
+    def test_calculate_checkout_totals_when_store_closed(self):
+        """تست ایجاد خطا در صورت محاسبه سبد خرید زمانی که فروشگاه بسته است"""
+        self.store.is_open = False
+        self.store.save()
+        
+        items = [{"product_id": self.product1.id, "count": 1}]
+        
+        with self.assertRaises(ValidationError) as context:
+            calculate_checkout_totals(items, "delivery")
+            
+        self.assertIn("فروشگاه در حال حاضر بسته است", str(context.exception))
+
+    def test_calculate_checkout_totals_when_store_open(self):
+        """تست عبور موفق محاسبات زمانی که فروشگاه باز است"""
+        self.store.is_open = True
+        self.store.save()
+        
+        items = [{"product_id": self.product1.id, "count": 1}]
+        totals = calculate_checkout_totals(items, "delivery")
+        
+        self.assertEqual(totals['total'], 120000) # (100k - 10k discount) + 30k delivery = 120k

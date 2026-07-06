@@ -54,3 +54,29 @@ class OrdersAPITestCase(APITestCase):
             self.assertEqual(self.product.stock, 5)
             # رکوردی نباید در جدول سفارشات ذخیره شده باشد
             self.assertEqual(Order.objects.count(), 0)
+
+    # افزودن این متد به کلاس OrdersAPITestCase در shop/test_orders.py
+
+    def test_order_courier_status_auto_assignment(self):
+        """تست تخصیص خودکار وضعیت پیک بر اساس نوع تحویل حضوری یا ارسال با پیک"""
+        # ثبت سفارش با پیک (Delivery)
+        url = reverse('orders')
+        data_delivery = {
+            "delivery_type": "delivery",
+            "address_id": self.address.id,
+            "items": [{"product_id": self.product.id, "count": 1}]
+        }
+        res_delivery = self.client.post(url, data_delivery, format='json')
+        self.assertEqual(res_delivery.status_code, status.HTTP_201_CREATED)
+        order_delivery = Order.objects.get(id=res_delivery.data['order_id'])
+        self.assertEqual(order_delivery.courier_status, 'pending')
+
+        # ثبت سفارش تحویل حضوری (Pickup)
+        data_pickup = {
+            "delivery_type": "pickup",
+            "items": [{"product_id": self.product.id, "count": 1}]
+        }
+        res_pickup = self.client.post(url, data_pickup, format='json')
+        self.assertEqual(res_pickup.status_code, status.HTTP_201_CREATED)
+        order_pickup = Order.objects.get(id=res_pickup.data['order_id'])
+        self.assertEqual(order_pickup.courier_status, 'not_applicable')
