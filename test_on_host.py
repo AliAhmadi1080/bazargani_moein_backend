@@ -42,23 +42,22 @@ def run_smoke_tests(base_url):
         sys.exit(1)
 
     # ۲. تست دریافت اطلاعات فروشگاه (GET /store/)
-    res = requests.get(f"{base_url}/store/")
-    # اگر هنوز فروشگاهی نساخته باشید، خطای ۴۰۴ می‌دهد که از نظر فنی درست است (خطای سرور ۵۰۰ نیست)
-    assert_status(res, [200, 404], "۲. دریافت اطلاعات فروشگاه (/store/)")
+    res_store = requests.get(f"{base_url}/store/")
+    assert_status(res_store, [200, 404], "۲. دریافت اطلاعات فروشگاه (/store/)")
 
     # ۳. تست دریافت دسته‌بندی‌ها (GET /categories/)
-    res = requests.get(f"{base_url}/categories/")
-    assert_status(res, [200], "۳. دریافت لیست دسته‌بندی‌ها (/categories/)")
+    res_cat = requests.get(f"{base_url}/categories/")
+    assert_status(res_cat, [200], "۳. دریافت لیست دسته‌بندی‌ها (/categories/)")
 
     # ۴. تست دریافت محصولات (GET /products/)
-    res = requests.get(f"{base_url}/products/")
-    assert_status(res, [200], "۴. دریافت لیست محصولات (/products/)")
+    res_prod = requests.get(f"{base_url}/products/")
+    assert_status(res_prod, [200], "۴. دریافت لیست محصولات (/products/)")
 
     # ۵. تست ساخت کاربر جدید و دریافت کلید امنیتی (POST /users/)
-    res = requests.post(f"{base_url}/users/")
-    if assert_status(res, [201], "۵. ثبت کاربر جدید (POST /users/)"):
+    res_user = requests.post(f"{base_url}/users/")
+    if assert_status(res_user, [201], "۵. ثبت کاربر جدید (POST /users/)"):
         try:
-            user_key = res.json().get('user_key')
+            user_key = res_user.json().get('user_key')
             print(f"   🔑 شناسه کاربری ایجاد شده: {user_key}")
         except Exception:
             print("   ⚠️ خطا در استخراج user_key از پاسخ سرور")
@@ -68,16 +67,16 @@ def run_smoke_tests(base_url):
         headers = {'X-USER-KEY': user_key}
 
         # ۶. تست صفحه اصلی تجمیعی با هدر کاربر (GET /home/)
-        res = requests.get(f"{base_url}/home/", headers=headers)
-        assert_status(res, [200], "۶. دریافت اطلاعات صفحه اصلی تجمیعی (/home/)")
+        res_home = requests.get(f"{base_url}/home/", headers=headers)
+        assert_status(res_home, [200], "۶. دریافت اطلاعات صفحه اصلی تجمیعی (/home/)")
 
         # ۷. تست امنیت: تلاش برای دسترسی به پروفایل بدون هدر (باید ۴۰۱ یا ۴۰۳ بدهد)
-        res = requests.get(f"{base_url}/profile/")
-        assert_status(res, [401, 403], "۷. تست امنیت: تلاش برای دسترسی به پروفایل بدون هدر")
+        res_profile_no_header = requests.get(f"{base_url}/profile/")
+        assert_status(res_profile_no_header, [401, 403], "۷. تست امنیت: تلاش برای دسترسی به پروفایل بدون هدر")
 
         # ۸. تست دسترسی به پروفایل با هدر صحیح (GET /profile/)
-        res = requests.get(f"{base_url}/profile/", headers=headers)
-        assert_status(res, [200], "۸. دریافت اطلاعات پروفایل با هدر معتبر (/profile/)")
+        res_profile = requests.get(f"{base_url}/profile/", headers=headers)
+        assert_status(res_profile, [200], "۸. دریافت اطلاعات پروفایل با هدر معتبر (/profile/)")
 
         # ۹. تست ثبت آدرس جدید (POST /addresses/)
         address_data = {
@@ -85,17 +84,78 @@ def run_smoke_tests(base_url):
             "address": "خیابان تست، پلاک ۱",
             "is_default": True
         }
-        res = requests.post(f"{base_url}/addresses/", json=address_data, headers=headers)
-        assert_status(res, [201], "۹. ثبت آدرس جدید برای کاربر (/addresses/)")
+        res_addr = requests.post(f"{base_url}/addresses/", json=address_data, headers=headers)
+        assert_status(res_addr, [201], "۹. ثبت آدرس جدید برای کاربر (/addresses/)")
 
-        # ۱۰. تست پیش‌فاکتور (POST /checkout/) - کاملاً امن و بدون ایجاد سفارش واقعی در دیتابیس
+        # ۱۰. تست پیش‌فاکتور (POST /checkout/)
         checkout_data = {
             "delivery_type": "delivery",
-            "items": [] # لیست خالی ارسال می‌کنیم تا فرمت بررسی شود
+            "items": []
         }
-        res = requests.post(f"{base_url}/checkout/", json=checkout_data, headers=headers)
-        # به دلیل خالی بودن سبد خرید انتظار خطای ۴۰۰ منطقی (نه خطای ۵۰۰ سرور) داریم
-        assert_status(res, [400], "۱۰. تست ساختار ورودی محاسبات مالی (/checkout/)")
+        res_checkout = requests.post(f"{base_url}/checkout/", json=checkout_data, headers=headers)
+        assert_status(res_checkout, [400], "۱۰. تست ساختار ورودی محاسبات مالی (/checkout/)")
+
+        # ======================================================================
+        # 🧪 پیاده‌سازی بخش جدید تست‌های یکپارچه‌سازی، ردیابی زنده و امنیت کَش 🧪
+        # ======================================================================
+        
+        # استخراج آدرس ثبت شده در گام ۹ از متغیر مجزای res_addr
+        address_id = None
+        try:
+            if res_addr.status_code == 201:
+                address_id = res_addr.json().get('id')
+        except Exception:
+            pass
+
+        # تلاش برای پیدا کردن محصولی با موجودی مناسب جهت ثبت سفارش آزمایشی
+        product_id = None
+        try:
+            if res_prod.status_code == 200:
+                products = res_prod.json().get('results', [])
+                for p in products:
+                    if p.get('is_available') and p.get('stock', 0) > 0:
+                        product_id = p.get('id')
+                        break
+        except Exception:
+            pass
+
+        if address_id and product_id:
+            print("\n🔍 شروع تست‌های ردیابی زنده، امنیت کَش و تفکیک وضعیت‌ها...")
+            
+            # ۱۱. ثبت کاربر دوم (مهاجم تستی) برای سنجش امنیت مرزهای داده کلاینت‌ها
+            res_b = requests.post(f"{base_url}/users/")
+            user_key_b = None
+            if res_b.status_code == 201:
+                user_key_b = res_b.json().get('user_key')
+                
+            if user_key_b:
+                # ۱۲. ثبت سفارش واقعی توسط کاربر اول با محصول و آدرس تستی
+                order_data = {
+                    "delivery_type": "delivery",
+                    "address_id": address_id,
+                    "items": [{"product_id": product_id, "count": 1}]
+                }
+                res_order = requests.post(f"{base_url}/orders/", json=order_data, headers=headers)
+                
+                if assert_status(res_order, [201], "۱۱. ثبت سفارش آزمایشی با محصول واقعی (POST /orders/)"):
+                    order_id = res_order.json().get('order_id')
+                    
+                    if order_id:
+                        # ۱۳. تست امنیت کش: تلاش کاربر دوم برای ردیابی سفارش کاربر اول
+                        headers_b = {'X-USER-KEY': user_key_b}
+                        res_spy = requests.get(f"{base_url}/orders/{order_id}/tracking/", headers=headers_b)
+                        assert_status(res_spy, [404], "۱۲. امنیت ردیابی (عدم دسترسی کاربر دوم به سفارش کاربر اول)")
+                        
+                        # ۱۴. ردیابی سفارش توسط خودِ کاربر اول (مالک اصلی)
+                        res_track = requests.get(f"{base_url}/orders/{order_id}/tracking/", headers=headers)
+                        if assert_status(res_track, [200], "۱۳. ردیابی موفق سفارش توسط مالک اصلی (GET /orders/{id}/tracking/)"):
+                            tracking_info = res_track.json()
+                            print(f"   📊 وضعیت کلان سفارش: {tracking_info.get('status_display')}")
+                            print(f"   🏍️ وضعیت ترانزیت پیک: {tracking_info.get('courier_status_display')}")
+            else:
+                print("⚠️ خطا در ایجاد کاربر دوم برای انجام تست امنیت.")
+        else:
+            print("\n⚠️ هشدار: آدرس معتبر یا محصول با موجودی بزرگتر از صفر روی هاست یافت نشد.")
     else:
         print("⚠️ به دلیل عدم دریافت user_key، تست‌های مرحله دوم انجام نشدند.")
 

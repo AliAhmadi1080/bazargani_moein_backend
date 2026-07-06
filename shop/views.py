@@ -14,6 +14,7 @@ from .serializers import (
 from .authentication import XUserKeyAuthentication, IsAuthenticatedAppUser
 from .services import calculate_checkout_totals
 
+
 # --- ۱. ساخت کاربر اولیه ---
 class UserCreateView(APIView):
     """
@@ -252,9 +253,10 @@ class ProfileView(APIView):
         serializer = AppUserSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
+            # پاک کردن کش احراز هویت کاربر پس از هر تغییر مشخصات
+            cache.delete(f"user_key_{user.user_key}")
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 # --- ۹. مدیریت آدرس‌ها و گیرنده‌ها ---
 class AddressViewSet(viewsets.ModelViewSet):
@@ -295,33 +297,37 @@ class SettingsView(APIView):
     
 
 class OrderTrackingView(APIView):
-    """
-    اندپوینت بسیار سبک و کش‌محور برای ردیابی لحظه‌ای سفارش توسط اپلیکیشن موبایل
-    """
     authentication_classes = [XUserKeyAuthentication]
     permission_classes = [IsAuthenticatedAppUser]
 
     def get(self, request, pk):
         cache_key = f"order_tracking_{pk}"
-        
-        # ۱. تلاش برای خواندن مستقیم از کش
         tracking_data = cache.get(cache_key)
         
-        if not tracking_data:
-            # ۲. در صورت منقضی شدن یا نبودن کش، یک‌بار دیتابیس را بخوان
-            try:
-                order = Order.objects.get(pk=pk, user=request.user)
-                tracking_data = {
-                    "order_id": order.id,
-                    "status": order.status,
-                    "status_display": order.get_status_display(),
-                    "courier_status": order.courier_status,
-                    "courier_status_display": order.get_courier_status_display(),
-                    "delivery_type": order.delivery_type,
-                }
-                # ذخیره در کش برای ۳۰ دقیقه (به عنوان طول عمر حداکثر کالا در مسیر)
-                cache.set(cache_key, tracking_data, timeout=1800)
-            except Order.DoesNotExist:
+        # ۱. بررسی امنیتی در صورت وجود اطلاعات در کش
+        if tracking_data:
+            if tracking_data.get('user_id') != request.user.id:
                 return Response({"detail": "سفارش یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
-                
-        return Response(tracking_data)
+            
+            # فیلتر کردن و حذف شناسه کاربر از بدنه پاسخ نهایی جهت امنیت کلاینت
+            response_data = {k: v for k, v in tracking_data.items() if k != 'user_id'}
+            return Response(response_data)
+            
+        # ۲. در صورت نبود کش، خواندن از دیتابیس و اعتبارسنجی مالکیت سفارش
+        try:
+            order = Order.objects.get(pk=pk, user=request.user)
+            tracking_data = {
+                "order_id": order.id,
+                "user_id": order.user_id,
+                "status": order.status,
+                "status_display": order.get_status_display(),
+                "courier_status": order.courier_status,
+                "courier_status_display": order.get_courier_status_display(),
+                "delivery_type": order.delivery_type,
+            }
+            cache.set(cache_key, tracking_data, timeout=1800)
+            
+            response_data = {k: v for k, v in tracking_data.items() if k != 'user_id'}
+            return Response(response_data)
+        except Order.DoesNotExist:
+            return Response({"detail": "سفارش یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
