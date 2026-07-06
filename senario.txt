@@ -1,0 +1,13 @@
+سناریو ۱: مشتری ارسال با پیک (Delivery) را انتخاب کرده است:
+سفارش ثبت می‌شود ➔ status: waiting | courier_status: pending
+مغازه تایید می‌کند و شروع به بسته‌بندی می‌کند ➔ status: preparing
+پیک پیدا می‌شود و به سمت مغازه می‌آید ➔ courier_status: moving_to_store
+پیک می‌رسد دم در مغازه ➔ courier_status: at_store
+مغازه بسته را به پیک می‌دهد ➔ status: ready | courier_status: moving_to_customer
+پیک بسته را به مشتری می‌دهد ➔ status: completed (فاکتور بسته شد).
+
+سناریو ۲: مشتری تحویل حضوری (Pickup) را انتخاب کرده است:
+سفارش ثبت می‌شود ➔ status: waiting | courier_status: not_applicable
+مغازه بسته را آماده می‌کند ➔ status: preparing
+بسته آماده است تا مشتری بیاید ببرد ➔ status: ready
+مشتری می‌آید و می‌برد ➔ status: completed

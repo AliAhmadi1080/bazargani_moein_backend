@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    UserCreateView, StoreDetailView, CategoryListView, 
+    OrderTrackingView, UserCreateView, StoreDetailView, CategoryListView, 
     ProductListView, ProductDetailView, HomeView, 
     CheckoutView, OrderView, ProfileView, 
     AddressViewSet, RecipientViewSet, SettingsView
@@ -28,4 +28,6 @@ urlpatterns = [
     
     # آدرس‌ها و گیرنده‌ها (ViewSet CRUD)
     path('', include(router.urls)),
+
+    path('orders/<int:pk>/tracking/', OrderTrackingView.as_view(), name='order-tracking'),
 ]

@@ -80,12 +80,23 @@ class Recipient(models.Model):
 
 class Order(models.Model):
     STATUS_CHOICES = (
-        ('waiting', 'در انتظار تایید'),
-        ('preparing', 'در حال آماده‌سازی'),
-        ('shipped', 'تحویل به پیک'),
-        ('delivered', 'تحویل داده شد'),
+        ('waiting', 'در انتظار تایید فروشگاه'),
+        ('preparing', 'در حال آماده‌سازی سفارش'),
+        ('ready', 'آماده تحویل (منتظر پیک یا مشتری)'),
+        ('completed', 'تکمیل و تحویل شده'),
         ('canceled', 'لغو شده'),
     )
+
+    # 2. وضعیت فیزیکی پیک (فقط برای سفارشات delivery)
+    COURIER_STATUS_CHOICES = (
+        ('not_applicable', 'بدون پیک (تحویل حضوری)'),
+        ('pending', 'در جستجوی پیک'),
+        ('moving_to_store', 'پیک در مسیر فروشگاه'),
+        ('at_store', 'پیک در فروشگاه (در حال دریافت)'),
+        ('moving_to_customer', 'پیک در مسیر مقصد'),
+        # تحویل داده شد از اینجا حذف می‌شود، چون وقتی پیک کالا را داد، وضعیت کلان سفارش completed می‌شود.
+    )
+    
     user = models.ForeignKey(AppUser, on_delete=models.CASCADE, related_name='orders')
     delivery_type = models.CharField(max_length=20, default='delivery')  # delivery یا pickup
     address = models.ForeignKey(Address, on_delete=models.SET_NULL, null=True, blank=True)
@@ -93,7 +104,13 @@ class Order(models.Model):
     recipient_phone = models.CharField(max_length=20, null=True, blank=True)
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='waiting')
-    
+        
+    courier_status = models.CharField(
+        max_length=30, 
+        choices=COURIER_STATUS_CHOICES, 
+        default='not_assigned'
+    )
+
     # مبالغ نهایی ثبت‌شده در زمان خرید
     items_price = models.DecimalField(max_digits=12, decimal_places=0)
     discount = models.DecimalField(max_digits=12, decimal_places=0)

@@ -181,24 +181,23 @@ class OrderAdmin(admin.ModelAdmin):
     user_link.short_description = "مشتری"
 
     # عملیات‌های انبوه برای تغییر سریع وضعیت سفارشات توسط مدیر
-    actions = ['set_preparing', 'set_shipped', 'set_delivered', 'set_canceled']
+    actions = ['set_preparing', 'set_ready', 'set_completed', 'set_canceled']
 
     def set_preparing(self, request, queryset):
         queryset.update(status='preparing')
     set_preparing.short_description = "تغییر وضعیت به: در حال آماده‌سازی"
 
-    def set_shipped(self, request, queryset):
-        queryset.update(status='shipped')
-    set_shipped.short_description = "تغییر وضعیت به: تحویل به پیک"
+    def set_ready(self, request, queryset):
+        queryset.update(status='ready')
+    set_ready.short_description = "تغییر وضعیت به: آماده تحویل"
 
-    def set_delivered(self, request, queryset):
-        queryset.update(status='delivered')
-    set_delivered.short_description = "تغییر وضعیت به: تحویل داده شد"
+    def set_completed(self, request, queryset):
+        queryset.update(status='completed')
+    set_completed.short_description = "تغییر وضعیت به: تکمیل و تحویل شده"
 
     def set_canceled(self, request, queryset):
         queryset.update(status='canceled')
     set_canceled.short_description = "تغییر وضعیت به: لغو شده"
-
 
 # --- ۶. ثبت ساده بقیه مدل‌ها جهت دسترسی‌های موردی ---
 

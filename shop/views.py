@@ -1,8 +1,9 @@
-from django.db import transaction
 from django.db.models import Q
+from django.db import transaction
+from django.core.cache import cache
 from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework import status, viewsets
+from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 
 from .models import AppUser, Store, Category, Product, Address, Recipient, Order, OrderItem
@@ -291,3 +292,36 @@ class SettingsView(APIView):
             "contact_support": "021-XXXXXX",
             "terms_url": "https://example.com/terms"
         })
+    
+
+class OrderTrackingView(APIView):
+    """
+    اندپوینت بسیار سبک و کش‌محور برای ردیابی لحظه‌ای سفارش توسط اپلیکیشن موبایل
+    """
+    authentication_classes = [XUserKeyAuthentication]
+    permission_classes = [IsAuthenticatedAppUser]
+
+    def get(self, request, pk):
+        cache_key = f"order_tracking_{pk}"
+        
+        # ۱. تلاش برای خواندن مستقیم از کش
+        tracking_data = cache.get(cache_key)
+        
+        if not tracking_data:
+            # ۲. در صورت منقضی شدن یا نبودن کش، یک‌بار دیتابیس را بخوان
+            try:
+                order = Order.objects.get(pk=pk, user=request.user)
+                tracking_data = {
+                    "order_id": order.id,
+                    "status": order.status,
+                    "status_display": order.get_status_display(),
+                    "courier_status": order.courier_status,
+                    "courier_status_display": order.get_courier_status_display(),
+                    "delivery_type": order.delivery_type,
+                }
+                # ذخیره در کش برای ۳۰ دقیقه (به عنوان طول عمر حداکثر کالا در مسیر)
+                cache.set(cache_key, tracking_data, timeout=1800)
+            except Order.DoesNotExist:
+                return Response({"detail": "سفارش یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+                
+        return Response(tracking_data)
