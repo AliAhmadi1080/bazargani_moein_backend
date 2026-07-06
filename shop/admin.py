@@ -69,13 +69,17 @@ class StoreAdmin(admin.ModelAdmin):
 
 # --- ۴. طراحی پنل محصولات (Product) ---
 
+# --- ۴. طراحی پنل محصولات (Product) ---
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['image_preview', 'title', 'category', 'price_formatted', 'discount_percent', 'discounted_price_formatted', 'stock', 'is_available']
+    # تغییر در این خط: استفاده از فیلد عددی مستقیم 'price' به جای 'price_formatted'
+    list_display = ['image_preview', 'title', 'category', 'price', 'discount_percent', 'discounted_price_formatted', 'stock', 'is_available']
+    
     list_filter = ['category', 'is_available', 'discount_percent', 'brand']
     search_fields = ['title', 'brand', 'description']
     
-    # قابلیت ویرایش مستقیم از روی جدول کالاها
+    # حالا تمام فیلدهای این لیست به درستی در list_display بالا وجود دارند
     list_editable = ['price', 'discount_percent', 'stock', 'is_available']
     
     readonly_fields = ['image_preview', 'discounted_price_formatted']
@@ -99,11 +103,16 @@ class ProductAdmin(admin.ModelAdmin):
         return "بدون تصویر"
     image_preview.short_description = 'تصویر کالا'
 
+    # این متد دیگر در list_display استفاده نمی‌شود، اما در بخش نمایش فیلدها (fieldsets) همچنان کاربرد دارد
     def price_formatted(self, obj):
+        if obj.price is None:
+            return "۰ تومان"
         return f"{int(obj.price):,} تومان"
     price_formatted.short_description = "قیمت اصلی"
 
     def discounted_price_formatted(self, obj):
+        if obj.price is None or obj.discounted_price is None:
+            return "پس از ثبت محاسبه می‌شود"
         return f"{int(obj.discounted_price):,} تومان"
     discounted_price_formatted.short_description = "قیمت با تخفیف"
 
@@ -125,7 +134,6 @@ class ProductAdmin(admin.ModelAdmin):
     def set_discount_20(self, request, queryset):
         queryset.update(discount_percent=20)
     set_discount_20.short_description = "اعمال تخفیف ۲۰٪ بر روی کالاهای انتخاب شده"
-
 
 # --- ۵. طراحی پنل مدیریت سفارشات (Order) ---
 
@@ -153,13 +161,23 @@ class OrderAdmin(admin.ModelAdmin):
     ]
 
     def total_formatted(self, obj):
+        # بررسی خالی بودن فیلد قیمت نهایی در فرم جدید
+        if obj.total is None:
+            return "پس از ثبت محاسبه می‌شود"
         return f"{int(obj.total):,} تومان"
     total_formatted.short_description = "مبلغ پرداختی"
 
     # ساخت لینک پویای جابه‌جایی سریع از سفارش به پروفایل کاربر
     def user_link(self, obj):
-        url = reverse("admin:shop_appuser_change", args=[obj.user.id])
-        return format_html('<a href="{}" style="font-weight: bold; color: #1e88e5;">{}</a>', url, obj.user.name or f"کاربر شماره {obj.user.id}")
+        try:
+            # بررسی ایمنی برای حالتی که سفارش هنوز ثبت نشده یا فاقد کاربر است (مانند فرم سفارش جدید)
+            if not obj.pk or not obj.user:
+                return "کاربر مشخص نشده"
+            
+            url = reverse("admin:shop_appuser_change", args=[obj.user.id])
+            return format_html('<a href="{}" style="font-weight: bold; color: #1e88e5;">{}</a>', url, obj.user.name or f"کاربر شماره {obj.user.id}")
+        except Exception:
+            return "کاربر مشخص نشده"
     user_link.short_description = "مشتری"
 
     # عملیات‌های انبوه برای تغییر سریع وضعیت سفارشات توسط مدیر
